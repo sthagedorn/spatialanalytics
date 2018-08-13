@@ -138,9 +138,9 @@ object SpatialJoins {
       val join_time = (t1 - t0) / 1E9
       println("Join Time: " + join_time + " sec")
 
-      val total_time = read_time + leftPTime + rightPTime + join_time
+      // val total_time = /*read_time +*/ leftPTime + rightPTime + join_time
 
-      println("Total Join Time: " + total_time + " sec")
+      // println("Total Join Time: " + total_time + " sec")
 
       println("********************************************************************************************")
 
