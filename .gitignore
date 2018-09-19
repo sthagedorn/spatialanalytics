@@ -1,2 +1,11 @@
 *.jar
 *.class
+
+*.log
+*.data
+
+old
+
+*.pdf
+
+metastore_db
