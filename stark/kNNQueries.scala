@@ -82,7 +82,7 @@ object kNNQueries extends App {
     println("************************ POINT KNN Queries **************************************")
 
     val objectRDD = sc.textFile(points, numPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), arr(0).toDouble.toInt)}
-                      .index(None, RTreeConfig(order = 5))
+                      .index(None, RTreeConfig(order = 50))
                       .cache()
 
     warmup(objectRDD)
@@ -96,7 +96,7 @@ object kNNQueries extends App {
 
     println("************************ LineString KNN Queries **************************************")
     val objectRDD = sc.textFile(linestrings, numPartitions).map{ line => (STObject(line), line.length)}
-                      .index(None, RTreeConfig(order = 5))
+                      .index(None, RTreeConfig(order = 50))
                       .cache()
 
     warmup(objectRDD)
@@ -111,7 +111,7 @@ object kNNQueries extends App {
     println("************************ POLYGON KNN Queries **************************************")
 
     val objectRDD = sc.textFile(polygons, numPartitions).map{ line => (STObject(line), line.length)}
-                      .index(None, RTreeConfig(order = 5))
+                      .index(None, RTreeConfig(order = 50))
                       .cache()
 
     warmup(objectRDD)
@@ -126,7 +126,7 @@ object kNNQueries extends App {
     println("************************ Rectangle KNN Queries **************************************")
 
     val objectRDD = sc.textFile(rectangles, numPartitions).map{ line => (STObject(line), line.length)}
-                      .index(None, RTreeConfig(order = 5))
+                      .index(None, RTreeConfig(order = 50))
                       .cache()
 
     warmup(objectRDD)
