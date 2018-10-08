@@ -49,7 +49,6 @@ object SpatialJoins {
     for(j <- 1 to nQueries) {
       partitioners.foreach{ p =>
         
-
         runSpatialJoin(p, "point", "point")
         runSpatialJoin(p, "point", "linestring")
         runSpatialJoin(p, "point", "polygon")
@@ -70,6 +69,8 @@ object SpatialJoins {
 
     def runSpatialJoin(partitioningScheme: PartitionStrategy.PartitionStrategy, leftrdd: String, rightrdd: String) {
 
+      val dummy:Byte = 0
+
       // var count = 0L
       val beginTime = System.currentTimeMillis()
       var t0 = 0L
@@ -80,10 +81,10 @@ object SpatialJoins {
       t0 = System.nanoTime()
       val leftRDD = leftrdd match {
 
-        case "point" => sc.textFile(points, numPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), arr(0).toDouble.toInt)}
-        case "linestring" => sc.textFile(linestrings, numPartitions).map{ line => (STObject(line), line.length)}
-        case "rectangle" => sc.textFile(rectangles, numPartitions).map{ line => (STObject(line), line.length)}
-        case "polygon" => sc.textFile(polygons, numPartitions).map{ line => (STObject(line), line.length)}
+        case "point" => sc.textFile(points, numPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), dummy)}
+        case "linestring" => sc.textFile(linestrings, numPartitions).map{ line => (STObject(line), dummy)}
+        case "rectangle" => sc.textFile(rectangles, numPartitions).map{ line => (STObject(line), dummy)}
+        case "polygon" => sc.textFile(polygons, numPartitions).map{ line => (STObject(line), dummy)}
 
       }
 
@@ -94,7 +95,7 @@ object SpatialJoins {
         case PartitionStrategy.BSP =>
           BSPStrategy(0.1, 100000, leftrdd == "point",minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction=0.01)
         case PartitionStrategy.RTREE =>
-          RTreeStrategy(1024, leftrdd == "point",minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction=0.001)
+          RTreeStrategy(1024, leftrdd == "point",minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction=0.0001)
         }
 
 
@@ -105,7 +106,7 @@ object SpatialJoins {
                                       // .partitionBy(new RTreePartitioner(leftRDD.sample(false, 0.001).collect().toList,-180, 180.0001, -90, 90.0001,32*32))
                                       // .index(None, indexer)
                                       // .index(leftParti, indexer)
-                                      // .cache()
+                                      //.cache()
 
       // var sParti = leftRDDPartiAndIndex.partitioner.get.asInstanceOf[dbis.stark.spatial.partitioner.GridPartitioner]
       // println(s"LEFT: \t x: ${sParti.minX} -- ${sParti.maxX} \t y: ${sParti.minY} -- ${sParti.maxY}")
@@ -119,10 +120,10 @@ object SpatialJoins {
 
       val rightRDD = rightrdd match {
 
-        case "point" => sc.textFile(points, numPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), arr(0).toDouble.toInt)}
-        case "linestring" => sc.textFile(linestrings, numPartitions).map{ line => (STObject(line), line.length)}
-        case "rectangle" => sc.textFile(rectangles, numPartitions).map{ line => (STObject(line), line.length)}
-        case "polygon" => sc.textFile(polygons, numPartitions).map{ line => (STObject(line), line.length)}
+        case "point" => sc.textFile(points, numPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), dummy)}
+        case "linestring" => sc.textFile(linestrings, numPartitions).map{ line => (STObject(line), dummy)}
+        case "rectangle" => sc.textFile(rectangles, numPartitions).map{ line => (STObject(line), dummy)}
+        case "polygon" => sc.textFile(polygons, numPartitions).map{ line => (STObject(line), dummy)}
 
       }
 
@@ -156,7 +157,7 @@ object SpatialJoins {
        t1 = System.nanoTime()
 
       //  println(s"WarumUp ${(t1 - t0) / 1E9} sec")
-      println(s"stark;join;$leftrdd;$rightrdd;$partitioningScheme;prepare;${(t1 - t0) / 1E9}")
+      println(s"stark;join;$leftrdd;$rightrdd;$partitioningScheme;prepare;${(t1 - t0) / 1E9};-")
 
       t0 = System.nanoTime()
 
@@ -169,7 +170,7 @@ object SpatialJoins {
       val join_time = (t1 - t0) / 1E9
       // println(s"Join Time: $join_time sec ... Count: $count")
 
-      println(s"stark;join;$leftrdd;$rightrdd;$partitioningScheme;exec;${(t1 - t0) / 1E9}")
+      println(s"stark;join;$leftrdd;$rightrdd;$partitioningScheme;exec;${(t1 - t0) / 1E9};$count")
 
       // val total_time = /*read_time +*/ leftPTime + rightPTime + join_time
 
