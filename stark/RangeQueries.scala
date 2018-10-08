@@ -47,8 +47,8 @@ object RangeQueries extends App {
   conf.set("spark.ui.showConsoleProgress","false")
   val sc = new SparkContext(conf)
   
-  val metrics = new StatsListener()
-  sc.addSparkListener(metrics)
+  //val metrics = new StatsListener()
+  //sc.addSparkListener(metrics)
 
   Logger.getLogger("org").setLevel(Level.WARN)
   Logger.getLogger("akka").setLevel(Level.WARN)
@@ -92,9 +92,10 @@ object RangeQueries extends App {
   )
 
   val datasets = Seq("point", "linestring", "rectangle","polygon")
+  val partitioners = Seq("grid","bsp","rtree","none")
 
   for(dataset <- datasets) {
-    bm(dataset, ranges, "rtree")
+    bm(dataset, ranges, "none")
   }
   
   sc.stop()
@@ -103,21 +104,24 @@ object RangeQueries extends App {
 
   def loadRDD(rdd: String, parti: String) = {
 
+    val dummy: Byte = 0
+
     val raw = rdd match {
-      case "point" => sc.textFile(points, numInitPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), arr(0).toDouble.toInt)}
-      case "linestring" => sc.textFile(linestrings, numInitPartitions).map{ line => (STObject(line), line.length)}
-      case "rectangle" => sc.textFile(rectangles, numInitPartitions).map{ line => (STObject(line), line.length)}
-      case "polygon" => sc.textFile(polygons, numInitPartitions).map{ line => (STObject(line), line.length)}
+      case "point" => sc.textFile(points, numInitPartitions).map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), dummy)}
+      case "linestring" => sc.textFile(linestrings, numInitPartitions).map{ line => (STObject(line), dummy)}
+      case "rectangle" => sc.textFile(rectangles, numInitPartitions).map{ line => (STObject(line), dummy)}
+      case "polygon" => sc.textFile(polygons, numInitPartitions).map{ line => (STObject(line), dummy)}
     }
 
     val partitioner: Option[dbis.stark.spatial.partitioner.PartitionerConfig] = parti match {
       case "grid" => Some(GridStrategy(numInitPartitions, pointsOnly = rdd == "point", minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction = 0.01 ))
       case "bsp" => Some(BSPStrategy(0.5, 100000, pointsOnly = rdd == "point",minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction=0.01))
-      case "rtree" => Some(RTreeStrategy(1024, pointsOnly = rdd == "point",minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction=0.001))
+      case "rtree" => Some(RTreeStrategy(1024, pointsOnly = rdd == "point",minmax = Some((-180, 180.0001, -90, 90.0001)), sampleFraction=0.0001))
       case _ => None
     }
 
-    raw.index(indexer, partitioner).cache()
+    // raw.index(indexer, partitioner).cache()
+    raw
   }
 
 
@@ -135,25 +139,25 @@ object RangeQueries extends App {
     // Materialize IndexedRDD
     t0 = System.nanoTime()
     for (i <- 1 to warmupQueries) {
-      metrics.reset()
+      //metrics.reset()
       count = objectRDD.coveredby(rangeQueryWindow6).count()
     }
     t1 = System.nanoTime()
 
     // platform,querytype,range,total time,throughput,count,sel ratio
-    println(s"stark;rangequery;$ds;$parti;warmup;${(t1 - t0) / 1E9};-;$count;100;${metrics.maxPeakMemory};${metrics.shuffleWrite};${metrics.shuffleRead};${metrics.spilled}")
+    println(s"stark;rangequery;$ds;$parti;warmup;${(t1 - t0) / 1E9};-;$count;100")
 
 
     for(range <- ranges) {
       // Actual Measurements
       t0 = System.nanoTime()
       for (i <- 1 to nQueries) {
-        metrics.reset()
+        // metrics.reset()
         count1 = objectRDD.coveredby(range._2).count()
       }
       t1 = System.nanoTime()
 
-      println(s"stark;rangequery;$ds;$parti;${range._1};${(t1 - t0) / 1E9};${(nQueries * 60) / ((t1 - t0) / (1E9))};$count1;${((count1 * 100.0) / count)};${metrics.maxPeakMemory};${metrics.shuffleWrite};${metrics.shuffleRead};${metrics.spilled}")
+      println(s"stark;rangequery;$ds;$parti;${range._1};${((t1 - t0) / 1E9) / nQueries};${(nQueries * 60) / ((t1 - t0) / (1E9))};$count1;${((count1 * 100.0) / count)}")
     }
 
     

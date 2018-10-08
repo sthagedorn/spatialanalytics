@@ -16,14 +16,15 @@ import dbis.stark.StarkKryoRegistrator
 
 import org.apache.spark.scheduler._
 
-object RangeQueries extends App {
+object RangeQueriesPushDown extends App {
 
   val conf = new SparkConf().setAppName("STARK Range Queries w/ Pushdown")
    conf.set("spark.serializer", classOf[KryoSerializer].getName)
    conf.set("spark.kryo.registrator", classOf[StarkKryoRegistrator].getName)
   conf.set("spark.ui.showConsoleProgress","false")
   val sc = new SparkContext(conf)
-  
+  val startCtx = new dbis.stark.spatial.STSparkContext(sc)
+
   Logger.getLogger("org").setLevel(Level.WARN)
   Logger.getLogger("akka").setLevel(Level.WARN)
 
@@ -41,8 +42,11 @@ object RangeQueries extends App {
   val indexer = dbis.stark.spatial.indexed.RTreeConfig(order = 10)
 
 
-  val nQueries = 10
+  val nQueries = 1
   val warmupQueries = 3
+  val useObject = true
+
+  val BASE_PATH = "/data/stark_partitioned/" + (if(useObject) "binary/" else "")
 
   val rangeQueryWindow1 = STObject(new Envelope(-50.3010141441, -24.9526465797, -53.209588996, -30.1096863746))
   val rangeQueryWindow2 = STObject(new Envelope(-54.4270741441, -24.9526465797, -53.209588996, -30.1096863746))
@@ -68,12 +72,8 @@ object RangeQueries extends App {
   
   sc.stop()
 
-  
-
-  def loadRDD(rdd: String, parti: String, qry: STObject) = {
-
-    
-    val dir = "/data/stark_partitioned/"+rdd
+  def prepare(rdd: String, parti: String): Long = {
+    val dir = BASE_PATH+rdd
 
     val conf = sc.hadoopConfiguration
     val fs = org.apache.hadoop.fs.FileSystem.get(conf)
@@ -94,22 +94,21 @@ object RangeQueries extends App {
         case _ => ???
       }
 
-      raw.partitionBy(partitioner).saveAsStarkObjectFile(dir)
+      def formatter(tuple: (STObject, Int)): String = s"${tuple._1.wkt};${tuple._2}"
+      
+      val parted = raw.partitionBy(partitioner)
+      if(useObject)
+        parted.saveAsStarkObjectFile(dir)
+      else
+        parted.saveAsStarkTextFile(dir,formatter)
     }
 
-    val ctx = new dbis.stark.spatial.STSparkContext(sc)
+    loadRDD(rdd, rangeQueryWindow6).count()
+  }
+  
 
-    val raw = ctx.objectFile[(STObject,Int)](dir, qry)
-
-    // rdd match {
-    //     case "point" => raw.map(_.split(',')).map{ arr => (STObject(arr(0).toDouble, arr(1).toDouble), arr(0).toDouble.toInt)}
-    //     case "linestring" => raw.map{ line => (STObject(line), line.length)}
-    //     case "rectangle" => raw.map{ line => (STObject(line), line.length)}
-    //     case "polygon" => raw.map{ line => (STObject(line), line.length)}
-    // }
-
-    raw
-
+  def loadRDD(rdd:String, qry: STObject) = if(useObject) startCtx.objectFile[(STObject,Int)](BASE_PATH+rdd, qry, numInitPartitions) else {
+    startCtx.textFile(BASE_PATH+rdd,qry, numInitPartitions).map(line => line.split(';')).map( arr => (STObject(arr(0)),arr(1).toInt))
   }
 
 
@@ -121,15 +120,15 @@ object RangeQueries extends App {
     var count = 0L
 
     // Materialize IndexedRDD
-    // t0 = System.nanoTime()
+    t0 = System.nanoTime()
     // for (i <- 1 to warmupQueries) {
-    //   // metrics.reset()
-    //   count = objectRDD.coveredby(rangeQueryWindow6).count()
+      // metrics.reset()
+      count = prepare(ds, parti)
     // }
-    // t1 = System.nanoTime()
+    t1 = System.nanoTime()
 
-    // // platform,querytype,range,total time,throughput,count,sel ratio
-    // println(s"stark;rangequery;$ds;$parti;warmup;${(t1 - t0) / 1E9};-;$count;100")
+    // platform,querytype,range,total time,throughput,count,sel ratio
+    println(s"stark;rangequery;$ds;$parti;warmup;${(t1 - t0) / 1E9};-;$count;100")
 
 
     for(range <- ranges) {
@@ -137,11 +136,11 @@ object RangeQueries extends App {
       t0 = System.nanoTime()
       for (i <- 1 to nQueries) {
         // metrics.reset()
-        count1 = loadRDD(ds, parti, range._2).coveredby(range._2).count()
+        count1 = loadRDD(ds, range._2).coveredby(range._2).count()
       }
       t1 = System.nanoTime()
 
-      println(s"stark;rangequery;$ds;$parti;${range._1};${(t1 - t0) / 1E9};${(nQueries * 60) / ((t1 - t0) / (1E9))};$count1;${((count1 * 100.0) / count)}")
+      println(s"stark;rangequerypushdown;$ds;$parti;${range._1};${((t1 - t0) / 1E9)/nQueries};${(nQueries * 60) / ((t1 - t0) / (1E9))};$count1;${((count1 * 100.0) / count)}")
     }
 
     
